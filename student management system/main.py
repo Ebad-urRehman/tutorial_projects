@@ -1,7 +1,7 @@
 import sqlite3
 from PyQt6.QtWidgets import QApplication, QTreeWidget, QLabel, QLayout,\
     QLineEdit, QPushButton, QMainWindow, QTableWidget, QTableWidgetItem,\
-    QDialog, QVBoxLayout, QComboBox, QToolBar, QStatusBar
+    QDialog, QVBoxLayout, QComboBox, QToolBar, QStatusBar, QGridLayout, QMessageBox
 from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QAction, QIcon
 import sys
@@ -23,6 +23,7 @@ class MainWindow(QMainWindow):
         about_action = QAction("About", self)
         help_menu_bar.addAction(about_action)
         about_action.setMenuRole(QAction.MenuRole.NoRole)
+        about_action.triggered.connect(self.about)
         search_action = QAction(QIcon("search.png"), "Search", self)
         search_action.triggered.connect(self.search)
         edit_menu_bar.addAction(search_action)
@@ -46,7 +47,6 @@ class MainWindow(QMainWindow):
         self.setStatusBar(self.statusbar)
         # detect a cell click
         self.table.cellClicked.connect(self.cell_clicked)
-
 
     def cell_clicked(self):
         edit_button = QPushButton("Edit Selected")
@@ -92,6 +92,12 @@ class MainWindow(QMainWindow):
     def delete(self):
         dialog = DeleteDialog()
         dialog.exec()
+
+
+    def about(self):
+        dialog = AboutDialog()
+        dialog.exec()
+
 class InsertDialog(QDialog):
     def __init__(self):
         super().__init__()
@@ -175,13 +181,111 @@ class SearchDialog(QDialog):
         connection.close()
 
 
-class DeleteDialog():
-    pass
+class DeleteDialog(QDialog):
+    def __init__(self):
+        super().__init__()
+        self. setWindowTitle("Confirmation")
+
+        layout = QGridLayout()
+        confirmation_label = QLabel("Are you sure you want to delete?")
+        yes_button = QPushButton("Yes")
+        no_button = QPushButton("No")
+
+        layout.addWidget(confirmation_label, 0, 0, 1, 2)
+        layout.addWidget(yes_button, 1, 0, 1, 1)
+        layout.addWidget(no_button, 1, 1, 1, 1)
+
+        self.setLayout(layout)
+
+        yes_button.clicked.connect(self.delete)
+
+    def delete(self):
+        # finding selected cell row index and student id through index
+        index = main_win.table.currentRow()
+        student_id = main_win.table.item(index, 0).text()
+
+        # connection to sql
+        connection = sqlite3.connect("database.db")
+        cursor = connection.cursor()
+        cursor.execute("DELETE from students WHERE id = ?", (student_id,))
+        connection.commit()
+        cursor.close()
+        connection.close()
+        main_win.load_data()
+
+        self.close()
+
+        # QMessageBox is child of QDialogBox
+        confirm_widget = QMessageBox()
+        confirm_widget.setWindowTitle("Deleted Successfully")
+        confirm_widget.setText("Student Data Deleted Successfully")
+        confirm_widget.exec()
 
 
-class EditDialog():
-    pass
+class EditDialog(QDialog):
+    def __init__(self):
+        super().__init__()
+        self.setWindowTitle("Enter Student data")
+        self.setFixedWidth(300)
+        self.setFixedHeight(300)
 
+        layout = QVBoxLayout()
+
+        # we have to set a default value of old student name
+        self.index = main_win.table.currentRow()
+        default_student_name = main_win.table.item(self.index, 1).text()
+        # student_id
+        self.student_id = main_win.table.item(self.index, 0).text()
+
+        # editing student name widget to layout
+        self.student_name = QLineEdit(default_student_name)
+        self.student_name.setPlaceholderText("Name")
+        layout.addWidget(self.student_name)
+
+        # setting default value for course name
+        default_course_name = main_win.table.item(self.index, 2).text()
+        # adding combo box for sbujects
+        self.course_select = QComboBox()
+        courses = ["Data Structure", "Data Base", "Data Science", "AI", "ML", "Astronomy", "Biology", "Physics", "Math"]
+        self.course_select.addItems(courses)
+        self.course_select.setCurrentText(default_course_name)
+        layout.addWidget(self.course_select)
+
+        #setting default roll no
+        default_roll_no = main_win.table.item(self.index, 3).text()
+        # adding Roll number widget to layout
+        self.roll_no = QLineEdit(default_roll_no)
+        self.roll_no.setPlaceholderText("Roll no")
+        layout.addWidget(self.roll_no)
+
+        # add button
+        button = QPushButton("Update")
+        button.clicked.connect(self.update_student)
+        layout.addWidget(button)
+
+        self.setLayout(layout)
+
+    def update_student(self):
+        name = self.student_name.text()
+        course = self.course_select.itemText(self.course_select.currentIndex())
+        r_no = self.roll_no.text()
+        connection =  sqlite3.connect("database.db")
+        cursor = connection.cursor()
+        cursor.execute("UPDATE students SET name = ?, course = ?, mobile = ? WHERE id = ?",
+                       (name, course, r_no, self.student_id))
+        connection.commit()
+        cursor.close()
+        connection.close()
+        # refresh table
+        main_win.load_data()
+
+
+class AboutDialog(QMessageBox):
+    def __init__(self):
+        super().__init__()
+        self.setWindowTitle("About")
+        message = """This a Student management app!"""
+        self.setText(message)
 
 if __name__ == '__main__':
     # creating an app
